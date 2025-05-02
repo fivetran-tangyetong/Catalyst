@@ -304,7 +304,7 @@ export function Dashboard() {
 
             <Group>
               <Title order={3} color={theme.primaryColor}>
-                Catalyst Marketing Platform
+                Catalyst
               </Title>
             </Group>
 

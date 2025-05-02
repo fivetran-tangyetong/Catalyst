@@ -39,7 +39,7 @@ const LoginPage = ({ onLogin }: { onLogin: () => void }) => {
         height: "100vh",
       }}
     >
-      <h1>Catalyst Marketing Platform</h1>
+      <h1>Catalyst</h1>
       <p>AI-powered marketing automation for SMBs</p>
       <button
         onClick={onLogin}

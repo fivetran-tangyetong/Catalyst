@@ -1,4 +1,4 @@
-# Catalyst Marketing Platform Documentation
+# Catalyst Documentation
 
 ## Introduction
 
@@ -28,6 +28,7 @@ The Model Context Protocol is the backbone of Catalyst, enabling standardized co
 - **TaskRequest/TaskResponse**: Structured formats for task delegation and results
 
 The MCP enables:
+
 - Asynchronous communication between agents
 - Task delegation and status tracking
 - Error handling and recovery
@@ -38,37 +39,44 @@ The MCP enables:
 Catalyst implements 8 specialized agents:
 
 1. **Market Research Agent**: Gathers market intelligence, trends, and competitor information using Apify web scraping capabilities.
+
    - Analyzes trends
    - Researches competitors
    - Performs keyword research
    - Analyzes social media and market sentiment
 
 2. **ICP Discovery Agent**: Identifies ideal customer profiles and target demographics based on market research.
+
    - Segments audiences
    - Creates customer personas
    - Identifies target demographics
 
 3. **Campaign Planning Agent**: Creates strategic campaign plans based on research and ICP.
+
    - Develops campaign strategies
    - Sets campaign goals and KPIs
    - Creates content calendars
 
 4. **Content Generation Agent**: Creates marketing content using Vizcom's AI rendering capabilities.
+
    - Generates text content (social posts, emails, ad copy)
    - Creates visual content from sketches or text prompts
    - Combines text and visual elements for complete marketing assets
 
 5. **Localization Agent**: Translates and localizes content using DeepL's translation capabilities.
+
    - Translates text content to multiple languages
    - Preserves formatting and context
    - Handles campaign-wide localization
 
 6. **Scheduler/Posting Agent**: Manages timing and posting of content.
+
    - Schedules content for optimal times
    - Manages posting to different platforms
    - Tracks publishing status
 
 7. **Outreach Agent**: Handles direct customer communication.
+
    - Manages email campaigns
    - Coordinates event invitations via Luma
    - Personalizes outreach messages
@@ -106,6 +114,7 @@ A typical task processing workflow follows these steps:
 7. Upon approval, subsequent actions are triggered (e.g., scheduling, localization)
 
 Example workflow for content creation:
+
 ```
 User → Master Controller → Content Generation Agent → Localization Agent → Scheduler Agent → Publication
 ```
@@ -121,6 +130,7 @@ The Market Research Agent integrates with Apify to gather market intelligence:
 - **Social Media Analysis**: Collects data from social platforms to understand audience sentiment and engagement
 
 Implementation highlights:
+
 - Asynchronous API calls to Apify actors
 - Structured data extraction and processing
 - Intelligent analysis of scraped content
@@ -135,6 +145,7 @@ The Content Generation Agent leverages Vizcom's AI rendering capabilities:
 - **Variation Generation**: Creates multiple versions of visual content
 
 Implementation highlights:
+
 - Integration with Vizcom's API for image generation
 - Support for different visual styles and aspect ratios
 - Combination of text and visual elements for complete marketing assets
@@ -149,6 +160,7 @@ The Localization Agent uses DeepL's translation services:
 - **Campaign-wide Localization**: Translates entire campaigns to multiple languages
 
 Implementation highlights:
+
 - Recursive traversal of content structures to identify translatable text
 - Preservation of formatting and variables
 - Support for multiple target languages
@@ -165,6 +177,7 @@ The backend is implemented using Python FastAPI, providing:
 - Background task processing for long-running operations
 
 Key components:
+
 - **API Router**: Handles HTTP requests and responses
 - **Agent Manager**: Initializes and manages agent instances
 - **MCP Implementation**: Provides communication infrastructure
@@ -180,6 +193,7 @@ The frontend is built with React and TypeScript, featuring:
 - **State Management**: For managing application state
 
 Key components:
+
 - **Dashboard**: Overview of campaigns, content, and agent activity
 - **Content Creator**: Interface for generating new marketing content
 - **Campaign Manager**: Tools for planning and managing campaigns
@@ -194,28 +208,34 @@ A company is launching a new fitness tracker and needs to create a marketing cam
 ### Workflow
 
 1. **Market Research**:
+
    - The Market Research Agent scrapes competitor websites and social media
    - It identifies trending fitness topics and keywords
    - It analyzes market sentiment around fitness trackers
 
 2. **ICP Discovery**:
+
    - The ICP Discovery Agent identifies key demographics and personas
    - It determines that "health-conscious professionals" are the primary target
 
 3. **Campaign Planning**:
+
    - The Campaign Planning Agent creates a strategy focusing on convenience and health benefits
    - It suggests a mix of social media, email, and content marketing
 
 4. **Content Generation**:
+
    - The Content Generation Agent creates social media posts highlighting key features
    - It generates product images showing the fitness tracker in use
    - It creates email templates for the product launch
 
 5. **Localization**:
+
    - The Localization Agent translates content to Spanish and French
    - It ensures fitness terminology is appropriately localized
 
 6. **Scheduling**:
+
    - The Scheduler Agent determines optimal posting times
    - It creates a content calendar for the campaign duration
 
@@ -226,6 +246,7 @@ A company is launching a new fitness tracker and needs to create a marketing cam
 ### User Interaction
 
 Throughout this process, the user:
+
 1. Provides initial product information
 2. Reviews and approves generated content
 3. Makes adjustments to the campaign strategy as needed
@@ -278,7 +299,7 @@ Catalyst integrates multiple sponsor tools:
 
 ## Conclusion
 
-The Catalyst Marketing Platform demonstrates the power of multi-agent AI systems for marketing automation. By connecting specialized agents through a standardized protocol and integrating powerful third-party tools, Catalyst enables SMBs to create sophisticated marketing campaigns with minimal manual effort.
+The Catalyst demonstrates the power of multi-agent AI systems for marketing automation. By connecting specialized agents through a standardized protocol and integrating powerful third-party tools, Catalyst enables SMBs to create sophisticated marketing campaigns with minimal manual effort.
 
 The platform showcases how AI agents can plan, decide, and act autonomously while still providing users with control and oversight at critical points. The integration of market research, content generation, localization, and scheduling creates a comprehensive end-to-end solution for modern marketing needs.
 

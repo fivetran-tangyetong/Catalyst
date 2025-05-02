@@ -1,5 +1,5 @@
 """
-Main FastAPI application for Catalyst Marketing Platform
+Main FastAPI application for Catalyst
 
 This module initializes the FastAPI application, sets up the MCP bus,
 registers all agents, and creates API endpoints for the platform.
@@ -62,8 +62,8 @@ VIZCOM_API_KEY = get_env_var("VIZCOM_API_KEY", "your_vizcom_api_key")
 
 # Create FastAPI app
 app = FastAPI(
-    title="Catalyst Marketing Platform API",
-    description="API for the Catalyst Marketing Platform, an AI-powered marketing automation system",
+    title="Catalyst API",
+    description="API for the Catalyst, an AI-powered marketing automation system",
     version="1.0.0"
 )
 
@@ -147,7 +147,7 @@ async def startup_event():
     """Initialize the MCP bus and agents on startup"""
     global mcp_bus, agents
     
-    logger.info("Starting Catalyst Marketing Platform")
+    logger.info("Starting Catalyst")
     
     # Initialize MCP bus
     mcp_bus = MCPBus()
@@ -166,14 +166,14 @@ async def startup_event():
         await agent.start()
         logger.info(f"Agent {agent_id} started")
     
-    logger.info("Catalyst Marketing Platform started successfully")
+    logger.info("Catalyst started successfully")
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Stop the MCP bus and agents on shutdown"""
     global mcp_bus, agents
     
-    logger.info("Shutting down Catalyst Marketing Platform")
+    logger.info("Shutting down Catalyst")
     
     # Stop all agents
     for agent_id, agent in agents.items():
@@ -184,7 +184,7 @@ async def shutdown_event():
     if mcp_bus:
         await mcp_bus.stop()
     
-    logger.info("Catalyst Marketing Platform shut down successfully")
+    logger.info("Catalyst shut down successfully")
 
 # Authentication endpoints
 @app.post("/token", response_model=Token)

@@ -1,5 +1,5 @@
 """
-Content Generation Agent for Catalyst Marketing Platform
+Content Generation Agent for Catalyst
 
 This agent is responsible for generating marketing content, including text copy and 
 visual content using Vizcom's AI rendering capabilities.

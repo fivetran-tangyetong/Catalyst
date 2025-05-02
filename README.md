@@ -1,4 +1,4 @@
-# Catalyst Marketing Platform
+# Catalyst
 
 Catalyst is an AI-powered multi-agent marketing platform designed to help Small and Medium Businesses (SMBs) scale their presales efforts through automated content creation, market research, campaign planning, and outreach.
 
@@ -21,7 +21,6 @@ Catalyst is an AI-powered multi-agent marketing platform designed to help Small 
   - Asyncio
   - Httpx
   - Pydantic
-  
 - **Frontend**:
   - Node.js 14+
   - React 17+
@@ -36,11 +35,13 @@ Catalyst is an AI-powered multi-agent marketing platform designed to help Small 
 Before setting up the application, you'll need to obtain API keys for the following services:
 
 1. **Apify API Key** (for market research)
+
    - Sign up at [Apify](https://apify.com/)
    - Navigate to Account Settings > Integrations
    - Create a new API key
 
 2. **DeepL API Key** (for translation)
+
    - Sign up at [DeepL API](https://www.deepl.com/pro-api)
    - Choose a plan (Free tier available)
    - Copy your API key from the account dashboard
@@ -53,23 +54,27 @@ Before setting up the application, you'll need to obtain API keys for the follow
 ### Backend Setup
 
 1. Clone the repository:
+
    ```bash
    git clone https://github.com/yourusername/catalyst-platform.git
    cd catalyst-platform
    ```
 
 2. Create a virtual environment:
+
    ```bash
    python -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
 3. Install dependencies:
+
    ```bash
    pip install -r requirements.txt
    ```
 
 4. Set environment variables:
+
    ```bash
    # Linux/macOS
    export APIFY_API_KEY=your_apify_api_key
@@ -83,6 +88,7 @@ Before setting up the application, you'll need to obtain API keys for the follow
    ```
 
    Alternatively, create a `.env` file in the root directory:
+
    ```
    APIFY_API_KEY=your_apify_api_key
    DEEPL_API_KEY=your_deepl_api_key
@@ -97,21 +103,25 @@ Before setting up the application, you'll need to obtain API keys for the follow
 ### Frontend Setup
 
 1. Navigate to the frontend directory:
+
    ```bash
    cd frontend
    ```
 
 2. Install dependencies:
+
    ```bash
    npm install
    ```
 
 3. Create a `.env` file with the backend API URL:
+
    ```
    REACT_APP_API_URL=http://localhost:8000
    ```
 
 4. Start the development server:
+
    ```bash
    npm start
    ```
@@ -129,6 +139,7 @@ Before setting up the application, you'll need to obtain API keys for the follow
 ### Dashboard
 
 The dashboard provides an overview of:
+
 - Active campaigns
 - Pending and completed content
 - Agent status
@@ -216,6 +227,7 @@ MIT
 ## Acknowledgments
 
 This project was created for the AI Agent Hackathon and utilizes the following sponsor tools:
+
 - [Apify](https://apify.com/) - Web scraping and automation
 - [DeepL](https://www.deepl.com/) - AI translation
 - [Vizcom](https://www.vizcom.ai/) - AI image generation

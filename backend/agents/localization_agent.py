@@ -1,5 +1,5 @@
 """
-Localization Agent for Catalyst Marketing Platform
+Localization Agent for Catalyst
 
 This agent is responsible for translating and localizing marketing content using
 DeepL's translation capabilities.
