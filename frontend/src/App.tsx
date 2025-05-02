@@ -8,6 +8,7 @@ import { Notifications } from "@mantine/notifications";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Dashboard } from "./components/Dashboard.tsx";
 import { ContentCreator } from "./components/ContentCreator.tsx";
+import { CampaignDetail } from "./components/CampaignDetail.tsx";
 
 export default function App() {
   const [colorScheme, setColorScheme] = useState<ColorScheme>("light");
@@ -37,6 +38,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/content/new" element={<ContentCreator />} />
+            <Route path="/campaigns/:id" element={<CampaignDetail />} />
             <Route path="*" element={<Dashboard />} />
           </Routes>
         </BrowserRouter>
