@@ -35,22 +35,22 @@ app.add_middleware(
 async def startup_event():
     ok = await apify.connect()
     if not ok:
-        print("Warning: could not connect to Apify MCP server")
+        logger.warning("Warning: could not connect to Apify MCP server")
     else:
-        # Kick off an initial tools/list to complete the SSE handshake
         try:
+            # this will block until the SSE endpoint event sets session_id
             await apify.list_tools()
-            logger.info("Apify MCP session established")
+            logger.info("✅ Apify MCP session established")
         except Exception as e:
             logger.warning(f"Apify handshake failed: {e!r}")
 
     ok2 = await vapi.connect()
     if not ok2:
-        print("Warning: could not connect to Vapi MCP server")
+        logger.warning("Warning: could not connect to Vapi MCP server")
     else:
         try:
             await vapi.list_assistants()
-            logger.info("Vapi MCP session established")
+            logger.info("✅ Vapi MCP session established")
         except Exception as e:
             logger.warning(f"Vapi handshake failed: {e!r}")
 

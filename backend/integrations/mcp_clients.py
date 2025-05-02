@@ -19,11 +19,13 @@ class MCPMessageType(str, Enum):
 class MCPClient:
     def __init__(
         self,
-        server_url: str,
+        sse_url: str,
+        message_url: str,
         api_key: Optional[str] = None,
         env_vars: Optional[Dict[str, str]] = None,
     ):
-        self.server_url = server_url
+        self.sse_url = sse_url
+        self.message_url = message_url
         self.api_key = api_key
         self.env_vars = env_vars or {}
         self.session_id: Optional[str] = None
@@ -42,68 +44,74 @@ class MCPClient:
             params["token"] = self.api_key
 
         self._session = aiohttp.ClientSession()
-        try:
-            resp = await self._session.get(self.server_url, params=params)
-            if resp.status != 200:
-                await self._session.close()
-                logger.error(f"Failed to connect to MCP server: {resp.status}")
-                return False
-
-            async def sse_reader():
-                buf = {"event": None, "data": ""}
-                async for raw in resp.content:
-                    line = raw.decode().rstrip()
-                    if not line:
-                        yield buf
-                        buf = {"event": None, "data": ""}
-                    elif line.startswith("event:"):
-                        buf["event"] = line.split(":", 1)[1].strip()
-                    elif line.startswith("data:"):
-                        buf["data"] += line.split(":", 1)[1].strip()
-
-            self._sse_task = asyncio.create_task(self._process_sse_events(sse_reader()))
-            self.connected = True
-            logger.info(f"Connected to MCP server: {self.server_url}")
-            return True
-
-        except Exception as e:
+        resp = await self._session.get(self.sse_url, params=params)
+        if resp.status != 200:
+            logger.error(f"Failed to open SSE: {resp.status}")
             await self._session.close()
-            logger.error(f"Error connecting to MCP server: {e}")
             return False
+
+        # Read the first endpoint event to grab sessionId
+        buf = {"event": None, "data": ""}
+        async for raw in resp.content:
+            line = raw.decode().rstrip()
+            if not line:
+                if buf["event"] == "endpoint":
+                    # data like "/message?sessionId=xxx"
+                    sid = buf["data"].split("sessionId=")[-1]
+                    self.session_id = sid.strip()
+                    break
+                buf = {"event": None, "data": ""}
+            elif line.startswith("event:"):
+                buf["event"] = line.split(":", 1)[1].strip()
+            elif line.startswith("data:"):
+                buf["data"] += line.split(":", 1)[1].strip()
+
+        if not self.session_id:
+            logger.error("No sessionId received in handshake")
+            await self._session.close()
+            return False
+
+        # background reader for messages
+        async def sse_reader():
+            buf = {"event": None, "data": ""}
+            async for raw in resp.content:
+                line = raw.decode().rstrip()
+                if not line:
+                    yield buf
+                    buf = {"event": None, "data": ""}
+                elif line.startswith("event:"):
+                    buf["event"] = line.split(":", 1)[1].strip()
+                elif line.startswith("data:"):
+                    buf["data"] += line.split(":", 1)[1].strip()
+
+        self._sse_task = asyncio.create_task(self._process_sse_events(sse_reader()))
+        self.connected = True
+        logger.info(f"✅ Connected SSE (session_id={self.session_id})")
+        return True
 
     async def disconnect(self) -> None:
         if self._sse_task:
             self._sse_task.cancel()
-            try:
-                await self._sse_task
-            except asyncio.CancelledError:
-                pass
+            await self._sse_task
         if self._session:
             await self._session.close()
-
         self.connected = False
         self.session_id = None
-        logger.info(f"Disconnected from MCP server: {self.server_url}")
 
     async def _process_sse_events(self, reader):
         async for event in reader:
-            evt = event.get("event")
-            data = event.get("data")
-            if evt == "endpoint":
-                info = json.loads(data)
-                self.session_id = info.get("sessionId", str(uuid.uuid4()))
-            elif evt == "message":
+            if event["event"] == "message":
                 try:
-                    msg = json.loads(data)
+                    msg = json.loads(event["data"])
                     mid = msg.get("id")
-                    if mid and mid in self._response_futures:
+                    if mid in self._response_futures:
                         fut = self._response_futures.pop(mid)
                         fut.set_result(msg)
-                except Exception as e:
-                    logger.error(f"Failed parsing SSE message: {e}")
+                except Exception:
+                    logger.exception("Failed parsing SSE message")
 
-    async def send_message(self, method: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
-        if not self.connected and not await self.connect():
+    async def send_message(self, method: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        if not (self.connected or await self.connect()):
             raise ConnectionError("Not connected to MCP server")
         if not self.session_id:
             raise ConnectionError("No session ID")
@@ -113,25 +121,24 @@ class MCPClient:
             "jsonrpc": "2.0",
             "id": self.message_id,
             "method": method,
-            "params": params or {},
+            "params": params,
         }
         fut = asyncio.get_event_loop().create_future()
         self._response_futures[self.message_id] = fut
 
-        url = self.server_url.replace("/sse", "/message") + f"?session_id={self.session_id}"
+        url = f"{self.message_url}?session_id={self.session_id}"
         if self.api_key:
             url += f"&token={self.api_key}"
 
         async with self._session.post(url, json=payload) as resp:
             if resp.status != 202:
-                txt = await resp.text()
-                logger.error(f"Failed to send message: {resp.status} – {txt}")
-                raise ConnectionError(f"Failed to send message: {resp.status}")
+                text = await resp.text()
+                raise ConnectionError(f"Failed to send message: {resp.status} – {text}")
 
         return await asyncio.wait_for(fut, timeout=60)
 
     async def list_tools(self) -> List[Dict[str, Any]]:
-        resp = await self.send_message(MCPMessageType.TOOLS_LIST)
+        resp = await self.send_message(MCPMessageType.TOOLS_LIST, {})
         return resp.get("result", {}).get("tools", [])
 
     async def call_tool(self, name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -140,46 +147,44 @@ class MCPClient:
         )
         if "result" in resp:
             return resp["result"]
-        raise Exception(f"Tool call failed: {resp.get('error')}")
+        raise Exception(f"Tool call error: {resp.get('error')}")
 
 
 class ApifyMCPClient(MCPClient):
     def __init__(self, api_key: str):
-        super().__init__(
-            server_url="https://actors-mcp-server.apify.actor/sse",
-            api_key=api_key,
-        )
+        # SSE only for the Twitter scraper actor
+        sse = "https://actors-mcp-server.apify.actor/sse?actors=quacker/twitter-scraper"
+        message = "https://actors-mcp-server.apify.actor/message"
+        super().__init__(sse_url=sse, message_url=message, api_key=api_key)
 
 
 class VapiMCPClient(MCPClient):
     def __init__(self, api_key: str):
-        # pass your VAPI key *only* via env_vars to avoid token= param
-        super().__init__(
-            server_url="https://mcp.vapi.ai/sse",
-            api_key=None,
-            env_vars={"VAPI_API_KEY": api_key},
-        )
+        sse = "https://mcp.vapi.ai/sse"
+        message = "https://mcp.vapi.ai/message"
+        # We pass the key as an env var so it's sent in headers, not query
+        super().__init__(sse_url=sse, message_url=message, api_key=None, env_vars={"VAPI_API_KEY": api_key})
 
 
-class ArcadeClient:
-    def __init__(self, api_key: str):
-        self.api_key = api_key
-        self.base_url = "https://api.arcade.dev/v1"
-        self.headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        }
-        logger.info("Arcade: direct API, no MCP support.")
-
-# Example usage
+# Quick smoke-test
 if __name__ == "__main__":
-    import asyncio
-
     async def main():
-        client = ApifyMCPClient(api_key="YOUR_APIFY_KEY")
-        if await client.connect():
-            tools = await client.list_tools()
-            print("Tools:", tools)
-            await client.disconnect()
+        apify = ApifyMCPClient(api_key="YOUR_APIFY_TOKEN")
+        if await apify.connect():
+            tools = await apify.list_tools()
+            print("Apify tools:", tools)
+            data = await apify.call_tool("quacker/twitter-scraper", {
+                "handles": ["onepeloton"],
+                "tweetsDesired": 10,
+                "proxyConfig": {"useApifyProxy": True},
+            })
+            print("Scraped tweets:", data.get("tweets", [])[:2])
+            await apify.disconnect()
+
+        vapi = VapiMCPClient(api_key="YOUR_VAPI_TOKEN")
+        if await vapi.connect():
+            assistants = await vapi.list_tools()  # same JSON-RPC
+            print("VAPI tools:", assistants)
+            await vapi.disconnect()
 
     asyncio.run(main())
