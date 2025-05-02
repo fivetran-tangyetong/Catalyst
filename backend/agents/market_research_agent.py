@@ -1,5 +1,5 @@
 """
-Market Research Agent for Catalyst Marketing Platform
+Market Research Agent for Catalyst
 
 This agent is responsible for gathering market intelligence, trends, and competitor 
 information using Apify web scraping capabilities.

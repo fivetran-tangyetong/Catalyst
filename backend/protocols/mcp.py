@@ -1,5 +1,5 @@
 """
-Model Context Protocol (MCP) for Catalyst Marketing Platform
+Model Context Protocol (MCP) for Catalyst
 
 This module defines the core protocol for agent communication in the Catalyst platform.
 It provides base classes, interfaces, and type definitions for standardized agent interactions.
