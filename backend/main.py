@@ -1,5 +1,5 @@
 """
-Main FastAPI application for Catalyst
+Main FastAPI application for Catalyst Marketing Platform
 
 This module initializes the FastAPI application, sets up the MCP bus,
 registers all agents, and creates API endpoints for the platform.
@@ -16,6 +16,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from dotenv import load_dotenv
+from pathlib import Path
+
+# Load environment variables from .env file in the root directory
+load_dotenv(dotenv_path=Path('.') / '.env')
 
 # Import MCP components
 from backend.protocols.mcp import (
@@ -32,16 +37,16 @@ from backend.protocols.mcp import (
 from backend.agents.market_research_agent import MarketResearchAgent
 from backend.agents.content_generation_agent import ContentGenerationAgent
 from backend.agents.localization_agent import LocalizationAgent
-from dotenv import load_dotenv
-from pathlib import Path
+from backend.agents.social_media_agent import SocialMediaAgent
+from backend.agents.voice_agent import VoiceAgent
 
-load_dotenv(dotenv_path=Path('.') / '.env')
+# Import MCP clients
+from backend.integrations.mcp_clients import ApifyMCPClient, VapiMCPClient
 
 # Import other agents (to be implemented)
 # from backend.agents.icp_discovery_agent import ICPDiscoveryAgent
 # from backend.agents.campaign_planning_agent import CampaignPlanningAgent
 # from backend.agents.scheduler_agent import SchedulerAgent
-# from backend.agents.outreach_agent import OutreachAgent
 # from backend.agents.master_controller_agent import MasterControllerAgent
 
 # Configure logging
@@ -63,11 +68,27 @@ def get_env_var(var_name: str, default: str = None) -> str:
 APIFY_API_KEY = get_env_var("APIFY_API_KEY", "your_apify_api_key")
 DEEPL_API_KEY = get_env_var("DEEPL_API_KEY", "your_deepl_api_key")
 VIZCOM_API_KEY = get_env_var("VIZCOM_API_KEY", "your_vizcom_api_key")
+VAPI_API_KEY = get_env_var("VAPI_API_KEY", "your_vapi_api_key")
+
+# Social media API keys
+TWITTER_API_KEY = get_env_var("TWITTER_API_KEY", "your_twitter_api_key")
+TWITTER_API_SECRET = get_env_var("TWITTER_API_SECRET", "your_twitter_api_secret")
+TWITTER_ACCESS_TOKEN = get_env_var("TWITTER_ACCESS_TOKEN", "your_twitter_access_token")
+TWITTER_ACCESS_TOKEN_SECRET = get_env_var("TWITTER_ACCESS_TOKEN_SECRET", "your_twitter_access_token_secret")
+
+FACEBOOK_ACCESS_TOKEN = get_env_var("FACEBOOK_ACCESS_TOKEN", "your_facebook_access_token")
+
+INSTAGRAM_ACCESS_TOKEN = get_env_var("INSTAGRAM_ACCESS_TOKEN", "your_instagram_access_token")
+INSTAGRAM_BUSINESS_ID = get_env_var("INSTAGRAM_BUSINESS_ID", "your_instagram_business_id")
+
+LINKEDIN_CLIENT_ID = get_env_var("LINKEDIN_CLIENT_ID", "your_linkedin_client_id")
+LINKEDIN_CLIENT_SECRET = get_env_var("LINKEDIN_CLIENT_SECRET", "your_linkedin_client_secret")
+LINKEDIN_ACCESS_TOKEN = get_env_var("LINKEDIN_ACCESS_TOKEN", "your_linkedin_access_token")
 
 # Create FastAPI app
 app = FastAPI(
-    title="Catalyst API",
-    description="API for the Catalyst, an AI-powered marketing automation system",
+    title="Catalyst Marketing Platform API",
+    description="API for the Catalyst Marketing Platform, an AI-powered marketing automation system",
     version="1.0.0"
 )
 
@@ -87,6 +108,10 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 mcp_bus = None
 agents = {}
 registry = MCPRegistry()
+
+# MCP clients
+apify_mcp_client = None
+vapi_mcp_client = None
 
 # Pydantic models for API requests and responses
 class UserCredentials(BaseModel):
@@ -127,6 +152,17 @@ class DashboardMetrics(BaseModel):
     agent_status: Dict[str, str]
     recent_activities: List[Dict[str, Any]]
 
+class VoiceCallRequest(BaseModel):
+    phone_number: str
+    assistant_id: str
+    initial_message: Optional[str] = None
+
+class ScheduledCallRequest(BaseModel):
+    phone_number: str
+    assistant_id: str
+    schedule_time: str
+    initial_message: Optional[str] = None
+
 # Authentication functions (simplified for demo)
 async def authenticate_user(username: str, password: str) -> bool:
     """Authenticate a user (simplified)"""
@@ -149,19 +185,52 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
 @app.on_event("startup")
 async def startup_event():
     """Initialize the MCP bus and agents on startup"""
-    global mcp_bus, agents
+    global mcp_bus, agents, apify_mcp_client, vapi_mcp_client
     
-    logger.info("Starting Catalyst")
+    logger.info("Starting Catalyst Marketing Platform")
     
     # Initialize MCP bus
     mcp_bus = MCPBus()
     await mcp_bus.start()
+    
+    # Initialize MCP clients
+    apify_mcp_client = ApifyMCPClient(APIFY_API_KEY)
+    vapi_mcp_client = VapiMCPClient(VAPI_API_KEY)
+    
+    # Connect MCP clients
+    try:
+        await apify_mcp_client.connect()
+        logger.info("Connected to Apify MCP server")
+    except Exception as e:
+        logger.error(f"Failed to connect to Apify MCP server: {str(e)}")
+    
+    try:
+        await vapi_mcp_client.connect()
+        logger.info("Connected to Vapi MCP server")
+    except Exception as e:
+        logger.error(f"Failed to connect to Vapi MCP server: {str(e)}")
+    
+    # Prepare social media API keys dictionary
+    social_media_api_keys = {
+        "twitter_api_key": TWITTER_API_KEY,
+        "twitter_api_secret": TWITTER_API_SECRET,
+        "twitter_access_token": TWITTER_ACCESS_TOKEN,
+        "twitter_access_token_secret": TWITTER_ACCESS_TOKEN_SECRET,
+        "facebook_access_token": FACEBOOK_ACCESS_TOKEN,
+        "instagram_access_token": INSTAGRAM_ACCESS_TOKEN,
+        "instagram_business_id": INSTAGRAM_BUSINESS_ID,
+        "linkedin_client_id": LINKEDIN_CLIENT_ID,
+        "linkedin_client_secret": LINKEDIN_CLIENT_SECRET,
+        "linkedin_access_token": LINKEDIN_ACCESS_TOKEN
+    }
     
     # Initialize agents
     agents = {
         "market_research": MarketResearchAgent("market_research_agent", mcp_bus, APIFY_API_KEY),
         "content_generation": ContentGenerationAgent("content_generation_agent", mcp_bus, VIZCOM_API_KEY),
         "localization": LocalizationAgent("localization_agent", mcp_bus, DEEPL_API_KEY),
+        "social_media": SocialMediaAgent("social_media_agent", mcp_bus, social_media_api_keys),
+        "voice": VoiceAgent("voice_agent", mcp_bus, VAPI_API_KEY),
         # Add other agents as they are implemented
     }
     
@@ -170,25 +239,32 @@ async def startup_event():
         await agent.start()
         logger.info(f"Agent {agent_id} started")
     
-    logger.info("Catalyst started successfully")
+    logger.info("Catalyst Marketing Platform started successfully")
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Stop the MCP bus and agents on shutdown"""
-    global mcp_bus, agents
+    global mcp_bus, agents, apify_mcp_client, vapi_mcp_client
     
-    logger.info("Shutting down Catalyst")
+    logger.info("Shutting down Catalyst Marketing Platform")
     
     # Stop all agents
     for agent_id, agent in agents.items():
         await agent.stop()
         logger.info(f"Agent {agent_id} stopped")
     
+    # Disconnect MCP clients
+    if apify_mcp_client:
+        await apify_mcp_client.disconnect()
+    
+    if vapi_mcp_client:
+        await vapi_mcp_client.disconnect()
+    
     # Stop MCP bus
     if mcp_bus:
         await mcp_bus.stop()
     
-    logger.info("Catalyst shut down successfully")
+    logger.info("Catalyst Marketing Platform shut down successfully")
 
 # Authentication endpoints
 @app.post("/token", response_model=Token)
@@ -221,10 +297,11 @@ async def get_dashboard_metrics(current_user: dict = Depends(get_current_user)):
             "market_research": "active",
             "content_generation": "active",
             "localization": "active",
+            "social_media": "active",
+            "voice": "active",
             "icp_discovery": "idle",
             "campaign_planning": "idle",
             "scheduler": "idle",
-            "outreach": "idle",
             "master_controller": "active"
         },
         "recent_activities": [
@@ -245,6 +322,18 @@ async def get_dashboard_metrics(current_user: dict = Depends(get_current_user)):
                 "agent": "market_research",
                 "action": "Analyzed market trends for fitness trackers",
                 "status": "completed"
+            },
+            {
+                "timestamp": datetime.utcnow().isoformat(),
+                "agent": "social_media",
+                "action": "Posted content to Facebook and Twitter",
+                "status": "completed"
+            },
+            {
+                "timestamp": datetime.utcnow().isoformat(),
+                "agent": "voice",
+                "action": "Made outbound call to customer",
+                "status": "completed"
             }
         ]
     }
@@ -252,8 +341,8 @@ async def get_dashboard_metrics(current_user: dict = Depends(get_current_user)):
 # Campaign endpoints
 @app.post("/api/campaigns")
 async def create_campaign(
-    campaign: CampaignCreate,
     background_tasks: BackgroundTasks,
+    campaign: CampaignCreate,
     current_user: dict = Depends(get_current_user)
 ):
     """Create a new marketing campaign"""
@@ -376,8 +465,8 @@ async def get_campaign(
 # Content endpoints
 @app.post("/api/content")
 async def create_content(
-    content_request: ContentRequest,
     background_tasks: BackgroundTasks,
+    content_request: ContentRequest,
     current_user: dict = Depends(get_current_user)
 ):
     """Create new content using the content generation agent"""
@@ -450,11 +539,263 @@ async def get_content(
     else:
         raise HTTPException(status_code=404, detail="Content not found")
 
+# Social Media endpoints
+@app.post("/api/social-media/post")
+async def post_to_social_media(
+    background_tasks: BackgroundTasks,
+    post_request: dict = Body(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Post content to social media platforms"""
+    # Check if the social media agent is available
+    if "social_media" not in agents:
+        raise HTTPException(status_code=503, detail="Social media agent not available")
+    
+    # Extract parameters
+    content_id = post_request.get("content_id")
+    platforms = post_request.get("platforms", [])
+    content = post_request.get("content", {})
+    
+    if not content_id or not platforms or not content:
+        raise HTTPException(status_code=400, detail="Missing required parameters")
+    
+    # Schedule background task to post content
+    post_ids = []
+    for platform in platforms:
+        post_id = f"post_{platform}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        post_ids.append(post_id)
+        
+        background_tasks.add_task(
+            post_content_to_platform,
+            content_id,
+            platform,
+            content,
+            post_id
+        )
+    
+    return {
+        "content_id": content_id,
+        "post_ids": post_ids,
+        "platforms": platforms,
+        "status": "processing",
+        "message": f"Content posting initiated to {len(platforms)} platforms"
+    }
+
+@app.post("/api/social-media/schedule")
+async def schedule_social_media_post(
+    background_tasks: BackgroundTasks,
+    schedule_request: dict = Body(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Schedule content for posting to social media platforms"""
+    # Check if the social media agent is available
+    if "social_media" not in agents:
+        raise HTTPException(status_code=503, detail="Social media agent not available")
+    
+    # Extract parameters
+    content_id = schedule_request.get("content_id")
+    platforms = schedule_request.get("platforms", [])
+    content = schedule_request.get("content", {})
+    schedule_time = schedule_request.get("schedule_time")
+    
+    if not content_id or not platforms or not content or not schedule_time:
+        raise HTTPException(status_code=400, detail="Missing required parameters")
+    
+    # Schedule background task to schedule content
+    schedule_ids = []
+    for platform in platforms:
+        schedule_id = f"schedule_{platform}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        schedule_ids.append(schedule_id)
+        
+        background_tasks.add_task(
+            schedule_content_for_platform,
+            content_id,
+            platform,
+            content,
+            schedule_time,
+            schedule_id
+        )
+    
+    return {
+        "content_id": content_id,
+        "schedule_ids": schedule_ids,
+        "platforms": platforms,
+        "schedule_time": schedule_time,
+        "status": "scheduled",
+        "message": f"Content scheduled for {len(platforms)} platforms"
+    }
+
+@app.get("/api/social-media/optimal-times/{platform}")
+async def get_optimal_posting_times(
+    platform: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get optimal posting times for a platform"""
+    # Check if the social media agent is available
+    if "social_media" not in agents:
+        raise HTTPException(status_code=503, detail="Social media agent not available")
+    
+    # Create task request
+    task_request = TaskRequest(
+        task_type="get_optimal_times",
+        parameters={"platform": platform}
+    )
+    
+    # Execute the task
+    response = await agents["social_media"].handle_message({
+        "message_type": MessageType.TASK_REQUEST,
+        "sender": "api",
+        "recipients": ["social_media_agent"],
+        "payload": task_request.dict()
+    })
+    
+    if not hasattr(response, 'status') or response.status != TaskStatus.COMPLETED:
+        raise HTTPException(status_code=500, detail="Failed to get optimal posting times")
+    
+    return response.result
+
+# Voice Agent endpoints
+@app.post("/api/voice/call")
+async def make_voice_call(
+    call_request: VoiceCallRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Make an outbound voice call"""
+    # Check if the voice agent is available
+    if "voice" not in agents:
+        raise HTTPException(status_code=503, detail="Voice agent not available")
+    
+    # Create task request
+    task_request = TaskRequest(
+        task_type="make_call",
+        parameters={
+            "phone_number": call_request.phone_number,
+            "assistant_id": call_request.assistant_id,
+            "initial_message": call_request.initial_message
+        }
+    )
+    
+    # Execute the task
+    response = await agents["voice"].handle_message({
+        "message_type": MessageType.TASK_REQUEST,
+        "sender": "api",
+        "recipients": ["voice_agent"],
+        "payload": task_request.dict()
+    })
+    
+    if not hasattr(response, 'status') or response.status != TaskStatus.COMPLETED:
+        raise HTTPException(
+            status_code=500, 
+            detail=getattr(response, 'error_message', "Failed to make voice call")
+        )
+    
+    return response.result
+
+@app.post("/api/voice/schedule")
+async def schedule_voice_call(
+    schedule_request: ScheduledCallRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Schedule an outbound voice call"""
+    # Check if the voice agent is available
+    if "voice" not in agents:
+        raise HTTPException(status_code=503, detail="Voice agent not available")
+    
+    # Create task request
+    task_request = TaskRequest(
+        task_type="schedule_call",
+        parameters={
+            "phone_number": schedule_request.phone_number,
+            "assistant_id": schedule_request.assistant_id,
+            "schedule_time": schedule_request.schedule_time,
+            "initial_message": schedule_request.initial_message
+        }
+    )
+    
+    # Execute the task
+    response = await agents["voice"].handle_message({
+        "message_type": MessageType.TASK_REQUEST,
+        "sender": "api",
+        "recipients": ["voice_agent"],
+        "payload": task_request.dict()
+    })
+    
+    if not hasattr(response, 'status') or response.status != TaskStatus.COMPLETED:
+        raise HTTPException(
+            status_code=500, 
+            detail=getattr(response, 'error_message', "Failed to schedule voice call")
+        )
+    
+    return response.result
+
+@app.get("/api/voice/call/{call_id}")
+async def get_call_status(
+    call_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get the status of a voice call"""
+    # Check if the voice agent is available
+    if "voice" not in agents:
+        raise HTTPException(status_code=503, detail="Voice agent not available")
+    
+    # Create task request
+    task_request = TaskRequest(
+        task_type="get_call_status",
+        parameters={"call_id": call_id}
+    )
+    
+    # Execute the task
+    response = await agents["voice"].handle_message({
+        "message_type": MessageType.TASK_REQUEST,
+        "sender": "api",
+        "recipients": ["voice_agent"],
+        "payload": task_request.dict()
+    })
+    
+    if not hasattr(response, 'status') or response.status != TaskStatus.COMPLETED:
+        raise HTTPException(
+            status_code=500, 
+            detail=getattr(response, 'error_message', "Failed to get call status")
+        )
+    
+    return response.result
+
+@app.get("/api/voice/assistants")
+async def list_voice_assistants(
+    current_user: dict = Depends(get_current_user)
+):
+    """List available voice assistants"""
+    # Check if the voice agent is available
+    if "voice" not in agents:
+        raise HTTPException(status_code=503, detail="Voice agent not available")
+    
+    # Create task request
+    task_request = TaskRequest(
+        task_type="list_assistants",
+        parameters={}
+    )
+    
+    # Execute the task
+    response = await agents["voice"].handle_message({
+        "message_type": MessageType.TASK_REQUEST,
+        "sender": "api",
+        "recipients": ["voice_agent"],
+        "payload": task_request.dict()
+    })
+    
+    if not hasattr(response, 'status') or response.status != TaskStatus.COMPLETED:
+        raise HTTPException(
+            status_code=500, 
+            detail=getattr(response, 'error_message', "Failed to list voice assistants")
+        )
+    
+    return response.result
+
 # Agent endpoints
 @app.post("/api/agents/tasks")
 async def submit_agent_task(
-    task_request: AgentTaskRequest,
     background_tasks: BackgroundTasks,
+    task_request: AgentTaskRequest,
     current_user: dict = Depends(get_current_user)
 ):
     """Submit a task to a specific agent"""
@@ -613,6 +954,75 @@ async def localize_content(content_id: str, content: Dict[str, Any], target_lang
         logger.info(f"Content localization completed for {content_id}")
     except Exception as e:
         logger.error(f"Error localizing content: {str(e)}")
+
+async def post_content_to_platform(content_id: str, platform: str, content: Dict[str, Any], post_id: str):
+    """Background task to post content to a social media platform"""
+    logger.info(f"Posting content {content_id} to {platform}")
+    
+    try:
+        # Get the social media agent
+        social_media_agent = agents.get("social_media")
+        if not social_media_agent:
+            logger.error("Social media agent not available")
+            return
+        
+        # Create and execute the task
+        task_request = TaskRequest(
+            task_type="post_to_platform",
+            parameters={
+                "content_id": content_id,
+                "platform": platform,
+                "content": content,
+                "post_id": post_id
+            }
+        )
+        
+        # Execute the task
+        await social_media_agent.handle_message({
+            "message_type": MessageType.TASK_REQUEST,
+            "sender": "api",
+            "recipients": ["social_media_agent"],
+            "payload": task_request.dict()
+        })
+        
+        logger.info(f"Content posted to {platform} for {content_id}")
+    except Exception as e:
+        logger.error(f"Error posting content to {platform}: {str(e)}")
+
+async def schedule_content_for_platform(content_id: str, platform: str, content: Dict[str, Any], schedule_time: str, schedule_id: str):
+    """Background task to schedule content for a social media platform"""
+    logger.info(f"Scheduling content {content_id} for {platform} at {schedule_time}")
+    
+    try:
+        # Get the social media agent
+        social_media_agent = agents.get("social_media")
+        if not social_media_agent:
+            logger.error("Social media agent not available")
+            return
+        
+        # Create and execute the task
+        task_request = TaskRequest(
+            task_type="schedule_post",
+            parameters={
+                "content_id": content_id,
+                "platform": platform,
+                "content": content,
+                "schedule_time": schedule_time,
+                "schedule_id": schedule_id
+            }
+        )
+        
+        # Execute the task
+        await social_media_agent.handle_message({
+            "message_type": MessageType.TASK_REQUEST,
+            "sender": "api",
+            "recipients": ["social_media_agent"],
+            "payload": task_request.dict()
+        })
+        
+        logger.info(f"Content scheduled for {platform} at {schedule_time} for {content_id}")
+    except Exception as e:
+        logger.error(f"Error scheduling content for {platform}: {str(e)}")
 
 async def execute_agent_task(agent_id: str, task_id: str, task_type: str, parameters: Dict[str, Any]):
     """Background task to execute an agent task"""
