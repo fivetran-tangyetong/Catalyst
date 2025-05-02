@@ -2,7 +2,7 @@
 Market Research Agent for Catalyst
 
 This agent is responsible for gathering market intelligence, trends, and competitor 
-information using Apify web scraping capabilities.
+information using Apify web scraping capabilities through the Model Context Protocol (MCP).
 """
 
 import asyncio
@@ -24,164 +24,12 @@ from backend.protocols.mcp import (
     Priority
 )
 
+# Import the ApifyMCPClient instead of using direct API
+from backend.integrations.mcp_clients import ApifyMCPClient
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("market_research_agent")
-
-# Apify API integration
-class ApifyClient:
-    """Client for interacting with Apify API"""
-    
-    def __init__(self, api_token: str):
-        self.api_token = api_token
-        self.base_url = "https://api.apify.com/v2"
-        self.headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_token}"
-        }
-    
-    async def run_actor(self, actor_id: str, run_input: Dict[str, Any]) -> str:
-        """Run an Apify actor and return the run ID"""
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{self.base_url}/acts/{actor_id}/runs",
-                headers=self.headers,
-                json={"run": run_input}
-            )
-            response.raise_for_status()
-            data = response.json()
-            return data["data"]["id"]
-    
-    async def wait_for_run(self, run_id: str, timeout_secs: int = 300) -> str:
-        """Wait for an actor run to complete and return its status"""
-        start_time = datetime.now()
-        while (datetime.now() - start_time).total_seconds() < timeout_secs:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{self.base_url}/actor-runs/{run_id}",
-                    headers=self.headers
-                )
-                response.raise_for_status()
-                data = response.json()
-                status = data["data"]["status"]
-                
-                if status in ["SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"]:
-                    return status
-                
-                await asyncio.sleep(5)  # Check every 5 seconds
-        
-        return "TIMED-OUT"
-    
-    async def get_dataset_items(self, dataset_id: str) -> List[Dict[str, Any]]:
-        """Get items from an Apify dataset"""
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{self.base_url}/datasets/{dataset_id}/items",
-                headers=self.headers
-            )
-            response.raise_for_status()
-            return response.json()
-    
-    async def scrape_web_page(self, url: str) -> List[Dict[str, Any]]:
-        """Scrape a web page using the Apify Web Scraper actor"""
-        run_input = {
-            "startUrls": [{"url": url}],
-            "pseudoUrls": [],
-            "linkSelector": "a",
-            "pageFunction": """
-            async function pageFunction(context) {
-                const { request, log, $ } = context;
-                const title = $('title').text();
-                const metaDescription = $('meta[name="description"]').attr('content');
-                const h1 = $('h1').text();
-                
-                const data = {
-                    url: request.url,
-                    title: title,
-                    metaDescription: metaDescription,
-                    h1: h1,
-                    text: $('body').text(),
-                };
-                
-                return data;
-            }
-            """
-        }
-        
-        run_id = await self.run_actor("apify/web-scraper", run_input)
-        status = await self.wait_for_run(run_id)
-        
-        if status == "SUCCEEDED":
-            run_info = await self.get_actor_run(run_id)
-            dataset_id = run_info["data"]["defaultDatasetId"]
-            return await self.get_dataset_items(dataset_id)
-        else:
-            logger.error(f"Web scraping failed with status: {status}")
-            return []
-    
-    async def get_actor_run(self, run_id: str) -> Dict[str, Any]:
-        """Get details about an actor run"""
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{self.base_url}/actor-runs/{run_id}",
-                headers=self.headers
-            )
-            response.raise_for_status()
-            return response.json()
-    
-    async def search_google(self, query: str, num_results: int = 10) -> List[Dict[str, Any]]:
-        """Search Google using the Apify Google Search Results Scraper"""
-        run_input = {
-            "queries": query,
-            "maxPagesPerQuery": 1,
-            "resultsPerPage": num_results,
-            "mobileResults": False,
-            "languageCode": "en",
-            "countryCode": "US"
-        }
-        
-        run_id = await self.run_actor("apify/google-search-scraper", run_input)
-        status = await self.wait_for_run(run_id)
-        
-        if status == "SUCCEEDED":
-            run_info = await self.get_actor_run(run_id)
-            dataset_id = run_info["data"]["defaultDatasetId"]
-            return await self.get_dataset_items(dataset_id)
-        else:
-            logger.error(f"Google search failed with status: {status}")
-            return []
-    
-    async def scrape_social_media(self, platform: str, query: str) -> List[Dict[str, Any]]:
-        """Scrape social media platforms for content related to a query"""
-        actor_id = None
-        run_input = {}
-        
-        if platform.lower() == "twitter":
-            actor_id = "apify/twitter-scraper"
-            run_input = {
-                "searchTerms": [query],
-                "maxItems": 100,
-                "maxRequestRetries": 3
-            }
-        elif platform.lower() == "instagram":
-            actor_id = "apify/instagram-scraper"
-            run_input = {
-                "searchQuery": query,
-                "resultsLimit": 100
-            }
-        else:
-            raise ValueError(f"Unsupported social media platform: {platform}")
-        
-        run_id = await self.run_actor(actor_id, run_input)
-        status = await self.wait_for_run(run_id)
-        
-        if status == "SUCCEEDED":
-            run_info = await self.get_actor_run(run_id)
-            dataset_id = run_info["data"]["defaultDatasetId"]
-            return await self.get_dataset_items(dataset_id)
-        else:
-            logger.error(f"Social media scraping failed with status: {status}")
-            return []
 
 class MarketTrend(BaseModel):
     """Model for market trend data"""
@@ -209,7 +57,8 @@ class MarketResearchAgent(BaseAgent):
     
     def __init__(self, agent_id: str, mcp_bus: MCPBus, apify_token: str):
         super().__init__(agent_id, AgentType.MARKET_RESEARCH, mcp_bus)
-        self.apify_client = ApifyClient(apify_token)
+        # Replace ApifyClient with ApifyMCPClient
+        self.apify_client = ApifyMCPClient(apify_token)
         
         # Register task handlers
         self.register_task_handler("analyze_trends", self.handle_analyze_trends)
@@ -221,7 +70,17 @@ class MarketResearchAgent(BaseAgent):
     async def start(self) -> None:
         """Start the agent"""
         await super().start()
-        logger.info(f"Market Research Agent {self.agent_id} started with Apify integration")
+        logger.info(f"Market Research Agent {self.agent_id} started with Apify MCP integration")
+        
+        # Connect to Apify MCP server
+        try:
+            connected = await self.apify_client.connect()
+            if connected:
+                logger.info("Connected to Apify MCP server")
+            else:
+                logger.warning("Failed to connect to Apify MCP server")
+        except Exception as e:
+            logger.error(f"Error connecting to Apify MCP server: {str(e)}")
     
     async def handle_analyze_trends(self, task_request: TaskRequest) -> TaskResponse:
         """Handle a request to analyze market trends"""
@@ -233,8 +92,8 @@ class MarketResearchAgent(BaseAgent):
             logger.info(f"Analyzing trends for {product_category} over {timeframe}")
             await self.send_log("info", f"Starting trend analysis for {product_category}")
             
-            # Search for trends
-            search_results = await self.apify_client.search_google(
+            # Search for trends using Apify MCP client
+            search_results = await self.search_google(
                 f"{product_category} trends {timeframe}", 
                 num_results=20
             )
@@ -271,8 +130,8 @@ class MarketResearchAgent(BaseAgent):
             logger.info(f"Researching competitors for {product_name} in {industry}")
             await self.send_log("info", f"Starting competitor research for {product_name}")
             
-            # Search for competitors
-            search_results = await self.apify_client.search_google(
+            # Search for competitors using Apify MCP client
+            search_results = await self.search_google(
                 f"{industry} {product_name} competitors", 
                 num_results=15
             )
@@ -321,7 +180,7 @@ class MarketResearchAgent(BaseAgent):
             # Search for each seed keyword
             keyword_data = []
             for keyword in seed_keywords[:10]:  # Limit to top 10 seed keywords
-                search_results = await self.apify_client.search_google(keyword, num_results=10)
+                search_results = await self.search_google(keyword, num_results=10)
                 related_searches = self._extract_related_searches(search_results)
                 
                 keyword_data.append({
@@ -363,7 +222,7 @@ class MarketResearchAgent(BaseAgent):
             platform_data = {}
             for platform in platforms:
                 try:
-                    data = await self.apify_client.scrape_social_media(platform, product_name)
+                    data = await self.scrape_social_media(platform, product_name)
                     platform_data[platform] = data
                 except ValueError as e:
                     logger.warning(f"Skipping unsupported platform {platform}: {str(e)}")
@@ -405,7 +264,7 @@ class MarketResearchAgent(BaseAgent):
             
             if "reviews" in sources:
                 # Search for product reviews
-                search_results = await self.apify_client.search_google(
+                search_results = await self.search_google(
                     f"{product_name} reviews", 
                     num_results=15
                 )
@@ -416,7 +275,7 @@ class MarketResearchAgent(BaseAgent):
                 social_data = {}
                 for platform in ["twitter"]:  # Can expand to more platforms
                     try:
-                        data = await self.apify_client.scrape_social_media(platform, product_name)
+                        data = await self.scrape_social_media(platform, product_name)
                         social_data[platform] = data
                     except ValueError:
                         continue
@@ -424,7 +283,7 @@ class MarketResearchAgent(BaseAgent):
             
             if "news" in sources:
                 # Search for news articles
-                search_results = await self.apify_client.search_google(
+                search_results = await self.search_google(
                     f"{product_name} news", 
                     num_results=15
                 )
@@ -451,6 +310,109 @@ class MarketResearchAgent(BaseAgent):
                 status=TaskStatus.FAILED,
                 error_message=f"Failed to analyze market sentiment: {str(e)}"
             )
+    
+    # Updated methods to use Apify MCP client
+    async def search_google(self, query: str, num_results: int = 10) -> List[Dict[str, Any]]:
+        """Search Google using the Apify Google Search Results Scraper via MCP"""
+        try:
+            # Prepare input for the actor
+            input_data = {
+                "queries": query,
+                "maxPagesPerQuery": 1,
+                "resultsPerPage": num_results,
+                "mobileResults": False,
+                "languageCode": "en",
+                "countryCode": "US"
+            }
+            
+            # Run the actor using MCP client
+            result = await self.apify_client.run_actor("apify/google-search-scraper", input_data)
+            
+            # Extract and return the results
+            if "content" in result and isinstance(result["content"], list):
+                return result["content"]
+            else:
+                logger.warning("Unexpected result format from Google search")
+                return []
+        except Exception as e:
+            logger.error(f"Error searching Google: {str(e)}")
+            return []
+    
+    async def scrape_web_page(self, url: str) -> List[Dict[str, Any]]:
+        """Scrape a web page using the Apify Web Scraper actor via MCP"""
+        try:
+            # Prepare input for the actor
+            input_data = {
+                "startUrls": [{"url": url}],
+                "pseudoUrls": [],
+                "linkSelector": "a",
+                "pageFunction": """
+                async function pageFunction(context) {
+                    const { request, log, $ } = context;
+                    const title = $('title').text();
+                    const metaDescription = $('meta[name="description"]').attr('content');
+                    const h1 = $('h1').text();
+                    
+                    const data = {
+                        url: request.url,
+                        title: title,
+                        metaDescription: metaDescription,
+                        h1: h1,
+                        text: $('body').text(),
+                    };
+                    
+                    return data;
+                }
+                """
+            }
+            
+            # Run the actor using MCP client
+            result = await self.apify_client.run_actor("apify/web-scraper", input_data)
+            
+            # Extract and return the results
+            if "content" in result and isinstance(result["content"], list):
+                return result["content"]
+            else:
+                logger.warning("Unexpected result format from web scraper")
+                return []
+        except Exception as e:
+            logger.error(f"Error scraping web page: {str(e)}")
+            return []
+    
+    async def scrape_social_media(self, platform: str, query: str) -> List[Dict[str, Any]]:
+        """Scrape social media platforms for content related to a query via MCP"""
+        try:
+            actor_id = None
+            input_data = {}
+            
+            if platform.lower() == "twitter":
+                actor_id = "apify/twitter-scraper"
+                input_data = {
+                    "searchTerms": [query],
+                    "maxItems": 100,
+                    "maxRequestRetries": 3
+                }
+            elif platform.lower() == "instagram":
+                actor_id = "apify/instagram-scraper"
+                input_data = {
+                    "searchQuery": query,
+                    "resultsLimit": 100
+                }
+            else:
+                raise ValueError(f"Unsupported social media platform: {platform}")
+            
+            # Run the actor using MCP client
+            result = await self.apify_client.run_actor(actor_id, input_data)
+            
+            # Extract and return the results
+            if "content" in result and isinstance(result["content"], list):
+                return result["content"]
+            else:
+                logger.warning(f"Unexpected result format from {platform} scraper")
+                return []
+        except Exception as e:
+            logger.error(f"Error scraping {platform}: {str(e)}")
+            return []
     
     # Helper methods for trend analysis
     async def _extract_trends(self, search_results: List[Dict[str, Any]], product_category: str) -> List[MarketTrend]:
