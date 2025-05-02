@@ -32,6 +32,10 @@ from backend.protocols.mcp import (
 from backend.agents.market_research_agent import MarketResearchAgent
 from backend.agents.content_generation_agent import ContentGenerationAgent
 from backend.agents.localization_agent import LocalizationAgent
+from dotenv import load_dotenv
+from pathlib import Path
+
+load_dotenv(dotenv_path=Path('.') / '.env')
 
 # Import other agents (to be implemented)
 # from backend.agents.icp_discovery_agent import ICPDiscoveryAgent

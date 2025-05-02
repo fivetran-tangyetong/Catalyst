@@ -6,3 +6,7 @@ node_modules/
 
 # env files, even if they are in folders
 .env*
+
+venv/
+
+frontend/builds/
