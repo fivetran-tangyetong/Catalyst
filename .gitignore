@@ -9,4 +9,4 @@ node_modules/
 
 venv/
 
-frontend/builds/
+frontend/build/
