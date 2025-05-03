@@ -109,6 +109,8 @@ export function ContentCreator() {
                 { value: 'es', label: 'Spanish' },
                 { value: 'fr', label: 'French' },
                 { value: 'de', label: 'German' },
+                { value: 'en', label: 'English' },
+                { value: 'cm', label: 'Chinese' },
               ]}
               {...form.getInputProps('targetLanguages')}
             />
